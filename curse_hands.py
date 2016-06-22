@@ -1,5 +1,4 @@
-#import Leap
-import Leap, sys, thread, time
+import Leap
 from curses import wrapper
 import curses
 import time
