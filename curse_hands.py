@@ -3,6 +3,16 @@ from curses import wrapper
 import curses
 import time
 
+NUM_BONES_PER_FINGER = 3
+
+
+def project_leap_vector(vector):
+    """
+    Turn a Leap Motion vector into a curses-style (y,x) 3-D tuple for further processing.
+    """
+    return (vector[2], vector[0])
+
+
 class LineFunc(object):
     """ Represents y=mx+b """
     def __init__(self, slope, y_intercept):
@@ -63,10 +73,6 @@ class BoxTranslator(object):
     def __call__(self, point):
         """ Map input box location to output_box location. """
         return (self.y_tx(point[0]), self.x_tx(point[1]))
-        
-        
-def project_leap_vector(vector):
-    return (vector[2], vector[0])
 
 
 class HandsApp(object):
@@ -76,13 +82,9 @@ class HandsApp(object):
         self.win.clear()
         self.init_boxes()
         self.ensure_translator(None)
-        # ISSUE: what are the dimensions of the LeapMotion's inputs?
-        #  One option is to use the "interaction box", but that's not really a total bounding box.
-        #  Another option is to be adaptive - to scale to the largest values seen.  (Or largest values seen over the last N frames, a more complex case.)
-        #  We will start out with something hard-coded experimentally based on my own desktop, and complicate things from there as proves necessary to support the general case.
 
     def init_boxes(self):
-        self.input_box = Box(0, 0, 1, 1)    # will expand; degenerate-case size
+        self.input_box = Box(0, 0, 1, 1)    # will expand based on observed input values; starts at degenerate-case size
         self.output_box = Box(0, 0, self.win.getmaxyx()[0] - 1, self.win.getmaxyx()[1] - 1)
 
     def ensure_translator(self, input_point):
@@ -106,7 +108,7 @@ class HandsApp(object):
         bones = []
         frame = self.leap_controller.frame()
         for finger in frame.fingers:
-            for bone in [finger.bone(bone_id) for bone_id in range(4)]:
+            for bone in [finger.bone(bone_id) for bone_id in range(NUM_BONES_PER_FINGER + 1)]:
                 if not bone.is_valid:
                     continue
                 bone_start = project_leap_vector(bone.prev_joint)
@@ -114,21 +116,21 @@ class HandsApp(object):
                 bone_end = project_leap_vector(bone.next_joint)
                 bones.append((bone_start, bone_mid, bone_end))
         return bones
-                
+
     def run(self):
         self.win.nodelay(1)
-        bone_paint_chars = ['*', 'x']
-        
+        bone_paint_chars = ['*', 'x']   # A finger bone will look like:   *  x  *
+
         counter = 0
         should_quit = False
         while(not should_quit):
             counter += 1
             if counter % 50 == 0:
                 should_quit = self.win.getch() != -1
-               
+
             self.win.clear()
             bones = self.get_frame_finger_bones()
-            
+
             if not bones:
                 self.win.addstr(0, 0, '(No fingers; any key to exit.)')
                 self.win.refresh()
@@ -142,6 +144,7 @@ class HandsApp(object):
                     try:
                         self.win.addstr(int(tx_point[0]), int(tx_point[1]), bone_paint_chars[i % len(bone_paint_chars)])
                     except Exception as ex:
+                        # print input and output coordinates for the failure, with a pause to read them.
                         draw_fail = True
                         self.win.clear()
                         self.win.addstr(0, 0, '({0},{1}) => ({2},{3})'.format(
@@ -156,9 +159,11 @@ class HandsApp(object):
 
         self.win.refresh()
 
+
 def app_entry(win):
     app = HandsApp(win)
     app.run()
+
 
 if __name__ == '__main__':
     wrapper(app_entry)
