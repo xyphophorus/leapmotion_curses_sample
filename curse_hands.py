@@ -135,6 +135,7 @@ class HandsApp(object):
                 self.win.addstr(0, 0, '(No fingers; any key to exit.)')
                 self.win.refresh()
                 time.sleep(.1)
+                should_quit = self.win.getch() != -1
                 continue
             draw_fail = False
             for bone in bones:
